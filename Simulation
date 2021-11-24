@@ -1,0 +1,170 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import path3d as p3d
+import math
+ 
+#SOURCE ET PROGRAMME DE BASE: simulation_parabole.py, path3d.py, looping_track.py, fournis sur Moodle
+
+# Paramètres physiques:
+g = 9.81 # accélération de gravitation [m/s**2]
+b = 0.01 # écart des rails [m]
+r = 0.0079375 # diamètre de la bille [m]
+h = np.sqrt(r**2 - b**2/4) # hauteur du centre de la bille sur les rails [m]
+M = ((2*(r**2))/(5*h**2))+1
+e1 = 0.0004 # coefficient de frottement linéaire [m/(m/s)]
+mass = 0.0166 # poids [kg] 
+
+
+steps = 24 # nombre de pas de la simulation -> Nbre de points donnés
+
+tSim = np.zeros(steps+1) # array de temps, rempli dans la boucle de simulation
+sSim = np.zeros(steps+1) # array de distance curviligne, rempli dans la boucle de simulation
+VsSim = np.zeros(steps+1) # array de vitesse tangentielle, rempli dans la boucle de simulation
+As = np.zeros(steps+1)#array d'accélération, rempli dans la boucle de simulation
+hauteur = np.zeros(steps+1)#array de hauteur, rempli dans la boucle de simulation
+
+# valeurs initiales:
+
+tSim[0] = 0
+sSim[0] = 0
+VsSim[0] = 0
+i = 0
+norm_vect = []
+gn_vect =[]
+
+
+filename = 'Points_circuit.txt'
+
+with open(filename, 'r') as file :
+    new = []
+    liste = file.readlines()
+    
+    
+    for ij in liste :
+        new_line = ij.strip()
+        new_list = new_line.split()    
+        liste_nbre = []
+        for nbre in new_list :
+            element = float(nbre)
+            liste_nbre.append(element)
+            
+        new.append(liste_nbre)
+        
+    liste_xyz = np.array(new)
+    
+xyzPoints = liste_xyz.transpose() 
+
+sPath, xyzPath, TPath, CPath = p3d.path(xyzPoints, steps)
+
+dt = 0.2          # Temps pris par la bille pour passer entre chaque point [s]
+ 
+
+
+# boucle de simulation pour le calcul des vitesses, abscisses curvilignes et accélération:
+while i < steps:      #Dépend du nombres de points donnés, ici 24
+    
+    
+    Tz = TPath[2, i]   #Prend la composante z de chaque vecteur T tangent au point 
+
+    gs = (-9)*Tz
+    gs_vect = gs * TPath[:, i]  #Calcule le vecteur gs selon sa définition
+    gn = [0,0,-9] - gs_vect
+    norm_vect.append(gn)
+    Gn_vect = [((VsSim[i]**2)*CPath[0, i]-gn[0]), ((VsSim[i]**2)*CPath[1, i]-gn[1]), ((VsSim[i]**2)*CPath[2, i]-gn[2])]
+    Gn = math.sqrt(((VsSim[i]**2)*CPath[0, i]-gn[0])**2+((VsSim[i]**2)*CPath[1, i]-gn[1])**2+((VsSim[i]**2)*CPath[2, i]-gn[2])**2)      #Calcule |Vs^2*C - gn| (norme de vecteur)             
+    gn_vect.append(Gn_vect)
+    As[i] = (-e1*VsSim[i] * Gn/h + gs) / M       #Calcule de l'accélération selon le modèle physique 
+    print ('As =',As[i],'m/s^2 au point',i+1, ', et Vs =', VsSim[i], 'm/s au point', i+1)
+    VsSim[i+1] = VsSim[i] + As[i] * dt
+    sSim[i+1] = sSim[i] + VsSim[i+1] * dt
+    tSim[i+1] = tSim[i] + dt
+    hauteur[i] = xyzPoints[2,i]/100
+    i = i+1
+
+normal_vect = np.array(norm_vect).transpose()
+vecteur_Gn = np.array(gn_vect).transpose()
+
+#Plot de l'abscisse curviligne, de la vitesse et de l'accélération
+plt.figure()
+
+plt.subplot(311)
+
+plt.plot(tSim, sSim, 'b-', label='sim')
+plt.legend()
+plt.ylabel('s [cm]')
+plt.xlabel('t [s]')
+
+plt.subplot(312)
+
+plt.plot(tSim, VsSim, 'b-', label='sim')
+plt.legend()
+plt.ylabel('Vs [m/s]')
+plt.xlabel('t [s]')
+
+
+plt.subplot(313)
+
+plt.plot(tSim, As, 'b-', label='sim')
+plt.legend()
+plt.ylabel('As [m/s^2]')
+plt.xlabel('t [s]')
+plt.show()
+
+
+
+# Initialisation du plot du circuit
+
+s, xyzP, TP, CP = p3d.path(xyzPoints)
+
+num = 24   # nombre de points de passage
+length = sPath[-1]
+sMarks = np.linspace(0, length, num)
+length2 = s[-1]
+sMarks2 = np.linspace(0, length2, num)
+xyzMarks = np.empty((3, num))    # coordonnées
+TMarks = np.empty((3, num))      # vecteur tangent
+CMarks = np.empty((3, num))      # vecteur de courbure
+NMarks = np.empty((3,num))       # vecteur perpendiculaire 
+GMarks = np.empty((3, num))      # vecteur Gn
+
+for i in range(num):
+    xyz = p3d.ainterp(sMarks2[i], s, xyzP)
+    T = p3d.ainterp(sMarks2[i], s, TP)
+    C = p3d.ainterp(sMarks2[i], s, CP)
+    N = p3d.ainterp(sMarks[i], sPath, normal_vect)
+    G = p3d.ainterp(sMarks[i], sPath, vecteur_Gn)
+    
+    xyzMarks[:,i] = xyz
+    CMarks[:,i] = C
+    TMarks[:,i] = T
+    NMarks[:,i] = N 
+    GMarks[:,i] = G
+
+
+# graphique 3D : points, chemin et vecteurs
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+ax.set_box_aspect(np.ptp(xyzP, axis=1))
+ax.plot(xyzPoints[0],xyzPoints[1],xyzPoints[2],'bo', label='points')   #Affiche les points de passage sur le circuit
+ax.plot(xyzP[0],xyzP[1],xyzP[2], 'k-', lw=0.5, label='path')          #Affiche le tracé
+scale = 0.5*length/num
+
+#Dessine les vecteurs tangents, de courbure, de gravité et normal
+ax.quiver(xyzMarks[0],xyzMarks[1],xyzMarks[2],
+          scale*TMarks[0],scale*TMarks[1],scale*TMarks[2],
+          color='r', linewidth=0.5, label='T')              
+ax.quiver(xyzMarks[0],xyzMarks[1],xyzMarks[2],
+          scale*CMarks[0],scale*CMarks[1],scale*CMarks[2],
+          color='g', linewidth=0.5, label='C')
+ax.quiver(xyzMarks[0],xyzMarks[1],xyzMarks[2],NMarks[0], NMarks[1],NMarks[2], color ='b', linewidth= 0.5, label='gn')
+ax.quiver(xyzMarks[0],xyzMarks[1],xyzMarks[2],GMarks[0], GMarks[1],GMarks[2], color ='orange', linewidth= 0.5, label='Gn')
+
+
+ax.legend()            
+plt.show()
+
+
+
+
+
+
